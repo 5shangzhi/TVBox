@@ -89,6 +89,23 @@ jobs:
           sed -i '$a\RELEASE_KEY_PASSWORD=TVBoxOSC'          ./gradle.properties
           sed -i 's/^#\(org.gradle.jvmargs=.*\)/\1/'         ./gradle.properties
 
+      # ----------------------------------------------------
+      # 修复步骤 1: 显式安装 Python 3.8 (Chaquopy 对 3.10+ 支持不好)
+      # ----------------------------------------------------
+      - name: Setup Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      # ----------------------------------------------------
+      # 修复步骤 2: 降级 setuptools 解决 six.moves 报错
+      # ----------------------------------------------------
+      - name: Fix Python Dependencies for Chaquopy
+        run: |
+          pip install "setuptools<58.0.0"
+          pip install --upgrade pip
+          echo "Python Environment Ready"
+
       - uses: actions/setup-java@v4
         if: ${{ matrix.java_ver }}
         with:
@@ -105,15 +122,21 @@ jobs:
         if: ${{ env.commit }}
 
       # ----------------------------------------------------
-      # 修复步骤在此：修正 local.properties 和 Python 路径
+      # 修复步骤 3: 动态获取刚才安装的 Python 路径并注入 Gradle
       # ----------------------------------------------------
       - name: Configure Environment (local.properties & Python)
         if: ${{ env.commit }}
         working-directory: TVBoxOSC
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          
+          # 获取当前 Python (即 3.8) 的绝对路径
+          PY_PATH=$(which python)
+          echo "Detected Python Path: $PY_PATH"
+          
           echo "正在修正 build.gradle 中的 Python 路径..."
-          find . -name "build.gradle" -exec sed -i 's|buildPython.*|buildPython "/usr/bin/python3"|g' {} +
+          # 使用 | 作为分隔符防止路径中的斜杠冲突
+          find . -name "build.gradle" -exec sed -i "s|buildPython.*|buildPython \"$PY_PATH\"|g" {} +
 
       - name: Build With Gradle
         if: ${{ env.commit }}
