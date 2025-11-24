@@ -29,7 +29,6 @@ jobs:
           upStream=https://github.com/${{ matrix.userName }}/${{ matrix.repoName }}
           echo "upStream=$upStream" >> $GITHUB_ENV
           
-          # 注意：这里的 Broken pipe 是正常的，因为 head -1 提前结束了流
           commit=$(curl -sL $upStream/commits/${{ matrix.branchName }} |grep -o "/${{ matrix.userName }}/${{ matrix.repoName }}/commit/[a-z0-9]\+" |head -1 | cut -d\/ -f5)
           if [[ -z "${commit}" ]]; then
             commit=$(curl -s "https://api.github.com/repos/${{ matrix.userName }}/${{ matrix.repoName }}/commits/${{ matrix.branchName }}?per_page=1" | jq -r '.sha' )
@@ -82,7 +81,6 @@ jobs:
           signingConfig="$(echo "$signingConfig" |base64 -d )"
           sed -i -e "/defaultConfig {/i\\$signingConfigs " -e "/debug {/a\\$signingConfig " -e "/release {/a\\$signingConfig " app/build.gradle
           
-          # 确保 .github/workflows/TVBoxOSC.jks 存在于你的仓库
           cp -f ${{ github.workspace }}/.github/workflows/TVBoxOSC.jks app/TVBoxOSC.jks
           
           sed -i '$a\RELEASE_STORE_FILE=./TVBoxOSC.jks'      ./gradle.properties
@@ -107,13 +105,15 @@ jobs:
         if: ${{ env.commit }}
 
       # ----------------------------------------------------
-      # 修复部分：添加 local.properties 生成步骤
+      # 修复步骤在此：修正 local.properties 和 Python 路径
       # ----------------------------------------------------
-      - name: Create local.properties
+      - name: Configure Environment (local.properties & Python)
         if: ${{ env.commit }}
         working-directory: TVBoxOSC
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          echo "正在修正 build.gradle 中的 Python 路径..."
+          find . -name "build.gradle" -exec sed -i 's|buildPython.*|buildPython "/usr/bin/python3"|g' {} +
 
       - name: Build With Gradle
         if: ${{ env.commit }}
